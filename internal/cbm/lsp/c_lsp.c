@@ -985,7 +985,10 @@ const CBMType *c_parse_type_node(CLSPContext *ctx, TSNode node) {
             }
 
             // Parse template arguments
-            const CBMType *targs[16];
+            const CBMType *targs[16] = {
+                NULL}; /* zero-fill: cbm_type_substitute requires NULL-terminated args
+                          (uninitialized tail bound T to stack garbage -> corrupt type graph,
+                          bitcoin serialize.h) */
             int targ_count = 0;
             if (!ts_node_is_null(tmpl_args)) {
                 uint32_t nc = ts_node_named_child_count(tmpl_args);
@@ -1087,7 +1090,9 @@ const CBMType *c_parse_type_node(CLSPContext *ctx, TSNode node) {
         }
 
         // Parse template arguments
-        const CBMType *targs[16];
+        const CBMType *targs[16] = {
+            NULL}; /* zero-fill: cbm_type_substitute requires NULL-terminated args (uninitialized
+                      tail bound T to stack garbage -> corrupt type graph, bitcoin serialize.h) */
         int targ_count = 0;
         if (!ts_node_is_null(args_node)) {
             uint32_t nc = ts_node_named_child_count(args_node);
@@ -1585,7 +1590,10 @@ static const CBMType *c_eval_expr_type_inner(CLSPContext *ctx, TSNode node) {
                 f->signature->kind == CBM_TYPE_FUNC && f->signature->data.func.return_types &&
                 f->signature->data.func.return_types[0]) {
                 const CBMType *base_ret = f->signature->data.func.return_types[0];
-                const CBMType *targs[16];
+                const CBMType *targs[16] = {
+                    NULL}; /* zero-fill: cbm_type_substitute requires NULL-terminated args
+                              (uninitialized tail bound T to stack garbage -> corrupt type graph,
+                              bitcoin serialize.h) */
                 int targ_count = 0;
                 uint32_t tnc = ts_node_named_child_count(qi_tmpl_args);
                 for (uint32_t ti = 0; ti < tnc && targ_count < 15; ti++) {
@@ -1742,7 +1750,9 @@ static const CBMType *c_eval_expr_type_inner(CLSPContext *ctx, TSNode node) {
             return f->signature;
 
         // Parse explicit template arguments from <...>
-        const CBMType *targs[16];
+        const CBMType *targs[16] = {
+            NULL}; /* zero-fill: cbm_type_substitute requires NULL-terminated args (uninitialized
+                      tail bound T to stack garbage -> corrupt type graph, bitcoin serialize.h) */
         int targ_count = 0;
         if (!ts_node_is_null(args_node)) {
             uint32_t nc = ts_node_named_child_count(args_node);

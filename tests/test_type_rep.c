@@ -266,6 +266,31 @@ TEST(typerep_substitute_short_args_no_oob_issue427) {
     PASS();
 }
 
+/* A caller that forgets to NULL-terminate type_args (a stack array) makes the
+ * bounded walk read uninitialized memory — and a garbage "pointer" within the
+ * param count would be BOUND to a type param and woven into the resulting type
+ * graph (bitcoin serialize.h: Using<Fmt>(v) with explicit args bound T to stack
+ * garbage; the corrupt graph was dereferenced later -> SIGSEGV). Implausible
+ * values (misaligned / null-page) must act as the terminator instead. */
+TEST(typerep_substitute_rejects_garbage_args_entries) {
+    CBMArena a;
+    cbm_arena_init(&a);
+    const CBMType *t =
+        cbm_type_reference(&a, cbm_type_type_param(&a, "T")); /* T& as in Wrapper<F, T&> */
+    const char *params[] = {"F", "T", NULL};
+    const CBMType *args[2];
+    args[0] = cbm_type_named(&a, "proj.Fmt"); /* explicit arg for F */
+    args[1] = (const CBMType *)0x37;          /* simulated uninitialized stack garbage */
+    const CBMType *sub = cbm_type_substitute(&a, t, params, args);
+    ASSERT_NOT_NULL(sub);
+    ASSERT_EQ(sub->kind, CBM_TYPE_REFERENCE);
+    /* T has no real binding: it must be preserved, never the garbage value. */
+    ASSERT_TRUE(sub->data.reference.elem != (const CBMType *)0x37);
+    ASSERT_EQ(sub->data.reference.elem->kind, CBM_TYPE_TYPE_PARAM);
+    cbm_arena_destroy(&a);
+    PASS();
+}
+
 /* ── Suite ─────────────────────────────────────────────────────── */
 
 SUITE(type_rep) {
@@ -293,4 +318,5 @@ SUITE(type_rep) {
     /* SUBSTITUTION */
     RUN_TEST(typerep_substitute_unbound_param_preserved);
     RUN_TEST(typerep_substitute_short_args_no_oob_issue427);
+    RUN_TEST(typerep_substitute_rejects_garbage_args_entries);
 }

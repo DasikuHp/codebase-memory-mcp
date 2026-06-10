@@ -2,6 +2,10 @@
 #include <stdint.h>
 #include <string.h>
 
+/* No real allocation lives in the first page; values below this are garbage
+ * (e.g. small integers or truncated string bytes misread as pointers). */
+enum { TR_MIN_PLAUSIBLE_PTR = 4096 };
+
 // Singleton UNKNOWN type (no allocation needed).
 static const CBMType unknown_singleton = {.kind = CBM_TYPE_UNKNOWN};
 
@@ -769,8 +773,17 @@ const CBMType *cbm_type_substitute(CBMArena *a, const CBMType *t, const char **t
     while (type_params[nparams]) {
         nparams++;
     }
+    /* Contract: type_args must be NULL-terminated (it may be shorter than
+     * type_params). A misaligned or null-page value can never be a real
+     * CBMType* — it means a caller passed an unterminated array and the walk
+     * is reading uninitialized memory (seen on bitcoin's serialize.h: an
+     * explicit-template-arg call bound T to stack garbage that was woven into
+     * the registered type graph and dereferenced later -> SIGSEGV). Treat such
+     * values as the terminator so garbage can never enter a type graph. */
     int args_len = 0;
-    while (args_len < nparams && type_args[args_len]) {
+    while (args_len < nparams && type_args[args_len] &&
+           ((uintptr_t)type_args[args_len] & (sizeof(void *) - 1)) == 0 &&
+           (uintptr_t)type_args[args_len] >= TR_MIN_PLAUSIBLE_PTR) {
         args_len++;
     }
 
