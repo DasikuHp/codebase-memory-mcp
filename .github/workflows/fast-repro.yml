@@ -9,10 +9,10 @@ name: Fast Repro
 on:
   workflow_dispatch:
     inputs:
-      asan:
-        description: 'Build with ASan/UBSan (slower; needed for crash/UAF reds)'
-        type: boolean
-        default: false
+      suites:
+        description: 'Comma list of suite-name substrings to run (empty = all)'
+        type: string
+        default: ''
   push:
     branches: ['qa/fast-**']
 
@@ -27,13 +27,11 @@ jobs:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
       - name: Install deps
         run: sudo apt-get update && sudo apt-get install -y zlib1g-dev
-      - name: test-repro (fast, no sanitizers by default)
-        run: |
-          # No-ASan build is much faster and is enough for the extraction /
-          # attribution / invariant reds (the bulk). Crash/UAF reds need ASan
-          # → dispatch with asan=true, or rely on the full board.
-          if [ "${{ inputs.asan }}" = "true" ]; then
-            scripts/repro.sh CC=gcc CXX=g++
-          else
-            scripts/repro.sh CC=gcc CXX=g++ SANITIZE=
-          fi
+      - name: test-repro (single platform, ASan; CBM_REPRO_ONLY filters suites)
+        env:
+          # Optionally narrow to specific suites for a fast targeted check, e.g.
+          # CBM_REPRO_ONLY="repro_invariant_enclosing_parity,repro_grammar_systems".
+          # Empty = run all. (No-sanitizer builds crash on some suites, so ASan
+          # stays on; the single-platform run is the speedup vs the 5-platform board.)
+          CBM_REPRO_ONLY: ${{ github.event.inputs.suites }}
+        run: scripts/repro.sh CC=gcc CXX=g++

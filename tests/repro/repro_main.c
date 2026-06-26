@@ -27,12 +27,22 @@ int tf_skip_count = 0;
 
 #include "test_framework.h"
 
-/* Per-suite summary: redefine RUN_SUITE so every suite prints a one-line
- * "[SUITE] <name> P passed, F failed" report. Makes the board/fast-lane output
- * greppable for which suites still have reds without scraping every test line. */
+/* Per-suite summary + filter. RUN_SUITE prints a one-line
+ * "[SUITE] <name> P passed, F failed" report (greppable for which suites still
+ * have reds). When CBM_REPRO_ONLY is set (comma/space list of suite-name
+ * substrings), only matching suites run — for fast targeted validation of a
+ * single fix without rebuilding intent. */
+static int cbm_suite_enabled(const char *name) {
+    const char *only = getenv("CBM_REPRO_ONLY");
+    if (!only || !*only)
+        return 1;
+    return strstr(only, name) != NULL;
+}
 #undef RUN_SUITE
 #define RUN_SUITE(name)                                                                  \
     do {                                                                                 \
+        if (!cbm_suite_enabled(#name))                                                   \
+            break;                                                                       \
         int _p0 = tf_pass_count, _f0 = tf_fail_count;                                    \
         printf("\n%s=== %s ===%s\n", tf_dim(), #name, tf_reset());                       \
         suite_##name();                                                                  \
