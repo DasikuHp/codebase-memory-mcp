@@ -4076,11 +4076,14 @@ void cbm_run_kotlin_lsp(CBMArena *arena, CBMFileResult *result, const char *sour
         project_name = module_qn;
     }
 
-    /* Initial package_qn is empty — overridden by kotlin_lsp_process_file
-     * when it sees the `package_header` AST node. */
+    /* Initial package_qn is the FS-path module_qn ("<project>.<rel.path>"),
+     * matching the textual extractor's QN prefix so the LSP's caller_qn equals
+     * the call site's enclosing_func_qn (the join keys on an exact caller_qn
+     * match). A source `package_header`, when present, overrides this in
+     * kotlin_lsp_process_file for cross-file import resolution. */
     KotlinLSPContext ctx;
-    kotlin_lsp_init(&ctx, arena, use_source, use_source_len, &registry, "", module_qn, project_name,
-                    /*rel_path=*/NULL, &result->resolved_calls);
+    kotlin_lsp_init(&ctx, arena, use_source, use_source_len, &registry, module_qn, module_qn,
+                    project_name, /*rel_path=*/NULL, &result->resolved_calls);
 
     kotlin_lsp_process_file(&ctx, use_root);
 
