@@ -638,8 +638,11 @@ static TSNode resolve_func_name_c_family(TSNode *node_ptr, CBMLanguage lang, con
     }
     if ((lang == CBM_LANG_C || lang == CBM_LANG_CPP || lang == CBM_LANG_CUDA ||
          lang == CBM_LANG_GLSL || lang == CBM_LANG_HLSL || lang == CBM_LANG_ISPC ||
-         lang == CBM_LANG_SLANG) &&
+         lang == CBM_LANG_SLANG || lang == CBM_LANG_OBJC) &&
         strcmp(kind, "function_definition") == 0) {
+        /* Objective-C top-level C functions (`static int helper(int x) {...}`)
+         * have the same declarator structure as C — without this they get no
+         * name node and are dropped, so a call to them never resolves an edge. */
         return cbm_resolve_c_declarator_name_node(*node_ptr);
     }
     TSNode null_node = {0};
