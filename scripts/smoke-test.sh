@@ -1204,23 +1204,35 @@ if [ "$(uname -s)" = "Darwin" ]; then
     exit 1
   fi
 
-  codesign --remove-signature "$SECURITY_BIN" 2>/dev/null || true
-
   # Detect binary architecture (not shell arch — Rosetta reports x86_64 for arm64 binaries)
   BIN_ARCH=$(file "$SECURITY_BIN" | grep -o 'arm64\|x86_64' | head -1)
 
   if [ "$BIN_ARCH" = "arm64" ]; then
-    # arm64: unsigned must SIGKILL (exit 137 = 128+9)
+    # arm64: a binary whose code signature is INVALID must SIGKILL (exit 137 = 128+9).
+    # We CORRUPT the signature blob in place instead of `codesign --remove-signature`: since macOS
+    # 11, a binary with NO LC_CODE_SIGNATURE is ad-hoc re-signed on exec by newer macOS and RUNS
+    # (exit 0) — that made this test flaky, then consistently red on updated CI runner images.
+    # Leaving the LC_CODE_SIGNATURE load command intact but garbling its blob makes AMFI see
+    # "signed but invalid" and reject it before any user code runs (deterministic). Corrupting only
+    # the signature blob (not the code) keeps the later 10e re-sign valid — it replaces the blob and
+    # the code is untouched. Refs: github.com/garrytan/gstack#997, nodejs/node#40827.
+    SIG_OFF=$(otool -l "$SECURITY_BIN" 2>/dev/null | awk '/LC_CODE_SIGNATURE/{f=1} f&&/dataoff/{print $2; exit}')
+    if [ -n "$SIG_OFF" ]; then
+      head -c 1024 /dev/urandom | dd of="$SECURITY_BIN" bs=1 seek="$((SIG_OFF + 8))" count=1024 conv=notrunc 2>/dev/null
+    else
+      codesign --remove-signature "$SECURITY_BIN" 2>/dev/null || true
+    fi
     UNSIGNED_EXIT=0
     "$SECURITY_BIN" --version > /dev/null 2>&1 || UNSIGNED_EXIT=$?
     if [ "$UNSIGNED_EXIT" -eq 137 ] || [ "$UNSIGNED_EXIT" -eq 9 ]; then
-      echo "OK 10c: unsigned arm64 binary killed (exit $UNSIGNED_EXIT)"
+      echo "OK 10c: invalid-signature arm64 binary killed (exit $UNSIGNED_EXIT)"
     else
-      echo "FAIL 10c: unsigned arm64 exit=$UNSIGNED_EXIT (expected 137)"
+      echo "FAIL 10c: invalid-signature arm64 exit=$UNSIGNED_EXIT (expected 137)"
       exit 1
     fi
   else
-    # x86_64: unsigned should still run
+    # x86_64: signing is not enforced; an unsigned binary should still run
+    codesign --remove-signature "$SECURITY_BIN" 2>/dev/null || true
     if "$SECURITY_BIN" --version > /dev/null 2>&1; then
       echo "OK 10c: unsigned x86_64 binary runs (no signing required)"
     else
